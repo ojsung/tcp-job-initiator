@@ -1,0 +1,83 @@
+{
+  "name": "tcp-job-initiator",
+  "version": "1.0.0",
+  "description": "Initiates a TCP communication with a job acceptor, and sends the job requirements/parameters.",
+  "main": "src/app/index.js",
+  "scripts": {
+    "test": "tsc && node ./src/index.js",
+    "start": "tsnd --respawn ./typescript/src/app/index.ts",
+    "tsc": "tsc",
+    "lint": "standardx **/*.ts",
+    "lintfix": "standardx **/*.ts --fix",
+    "dev": "tsnd --respawn ./typescript/src/app/index.ts  --transpileOnly",
+    "prod": "tsc -d && node ./src/app/index.js"
+  },
+  "eslintConfig": {
+    "rules": {
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          "vars": "all",
+          "args": "none",
+          "ignoreRestSiblings": true
+        }
+      ],
+      "no-extend-native": "off",
+      "space-before-function-paren": [
+        "error",
+        {
+          "anonymous": "always",
+          "named": "never",
+          "asyncArrow": "always"
+        }
+      ],
+      "@typescript-eslint/no-use-before-define": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/strict-boolean-expressions": "off",
+      "@typescript-eslint/member-delimiter-style": [
+        "error",
+        {
+          "multiline": {
+            "delimiter": "none",
+            "requireLast": false
+          },
+          "singleline": {
+            "delimiter": "comma",
+            "requireLast": false
+          }
+        }
+      ],
+      "node/no-unsupported-features/es-syntax": "off"
+    }
+  },
+  "standardx": {
+    "parser": "@typescript-eslint/parser",
+    "plugins": [
+      "@typescript-eslint/eslint-plugin"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^13.1.2",
+    "@typescript-eslint/eslint-plugin": "^2.14.0",
+    "@typescript-eslint/parser": "^2.14.0",
+    "standardx": "^5.0.0",
+    "ts-node-dev": "^1.0.0-pre.44",
+    "typescript": "^3.7.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ojsung/tcp-job-initiator.git"
+  },
+  "keywords": [
+    "tcp",
+    "node",
+    "microservice"
+  ],
+  "author": "ojsung",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ojsung/tcp-job-initiator/issues"
+  },
+  "homepage": "https://github.com/ojsung/tcp-job-initiator#readme"
+}
