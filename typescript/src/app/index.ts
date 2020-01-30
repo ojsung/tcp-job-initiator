@@ -1,54 +1,70 @@
-import cluster, { Worker, Cluster } from 'cluster'
-import net, { Socket } from 'net'
-import { cpus } from 'os'
-import { IForkTracker } from './models/fork.interface'
-import config from '../config/config.js'
-import { ChildProcess } from 'child_process'
-import { IChannelIdentifier, ITaskedChannelIdentifier } from './models/channel-identifier.interface'
-import { ClusterForker } from './cluster-forker'
-import { TCPJobInitiatorSocket } from './tcp-job-initiator-socket'
+import cluster from 'cluster'
+import { IChannelIdentifier } from './models/channel-identifier.interface'
+import { ForkTasker } from './cluster/fork-tasker'
+import { EventEmitter } from 'events'
+import { ClusterMaster } from './cluster/cluster-master'
+import { JobStatusNotifier } from './models/job-status-notifier.abstract'
 
 /**
- * @todo Add a handler for when the incoming message from the child process is a string
+ * Tcpjob initiator
+ * @todo Have the application remove all listeners on a child process on finishing a job, and
+ * re-add them when the child process is triggered again.  Make sure that it checks to see if the
+ * listeners already exist, in case the child process is running multiple jobs so that it doesn't add
+ * duplicate listeners
+ * @todo Actually add some proper documentation to this code
  */
-const clusterForker: ClusterForker = new ClusterForker((cluster as unknown) as Cluster)
-
-if (cluster.isMaster) {
-  const numCPUs = cpus.length
-  for (let i = 0, j = numCPUs; i < j; ++i) {
-    clusterForker.createFork()
-  }
-} else {
-  // Because process and childprocess do not sufficiently overlap, have to first set it to unknown, then to childprocess.
-  const childProcess: ChildProcess = (process as unknown) as ChildProcess
-  // When the child process uses the process.send method, accept the taskedIdentifier from them and
-  childProcess.on('message', (message: any) => {
-    if (typeof message === 'string') {
-      // do something
-    } else {
-      const taskedIdentifier = message as ITaskedChannelIdentifier
-
-      const host: string = taskedIdentifier.targetIp
-      const port: number = config.port
-      const socket: Socket = net.createConnection({ host, port })
-      const tcpJobInitiatorSocket: TCPJobInitiatorSocket = new TCPJobInitiatorSocket(
-        socket,
-        childProcess
-      )
-      socket.on('connect', () => {
-        tcpJobInitiatorSocket.connect(taskedIdentifier)
-      })
-      socket.on('data', tcpJobInitiatorSocket.data)
-      socket.on('end', tcpJobInitiatorSocket.end)
+export default class TCPJobInitiator {
+  constructor() {
+    // Check if there are listeners subscribed to the die and undie events for the death monitor.
+    // If there aren't, add them.
+    const dieDeathMonitorListeners = TCPJobInitiator.deathMonitor.listeners('die')
+    const undieDeathMonitorListeners = TCPJobInitiator.deathMonitor.listeners('undie')
+    if (!dieDeathMonitorListeners.length) {
+      TCPJobInitiator.deathMonitor.on('die', () => (TCPJobInitiator._appIsAwaitingDeath = true))
     }
-  })
-}
+    if (!undieDeathMonitorListeners.length) {
+      TCPJobInitiator.deathMonitor.on('undie', () => (TCPJobInitiator._appIsAwaitingDeath = false))
+    }
+    // If workers haven't been spawned, spawn the workers
+    if (!ClusterMaster.forksCreated) {
+      this.clusterMaster.initiateForking()
+    }
+  }
 
-export function initiateJobRequest(identifier: IChannelIdentifier, task: string) {
-  const cpuLoadIndex: number = clusterForker.findMostAvailableJobTakerIndex()
-  const fork: IForkTracker = clusterForker.cpuLoadIndexToForkedCPU[cpuLoadIndex]
-  const workerId = fork.id
-  const worker: Worker = cluster.workers[workerId] as Worker
-  const taskedIdentifier: ITaskedChannelIdentifier = { ...identifier, task }
-  worker.send(taskedIdentifier)
+  /**
+   *   This event emitter will be used to let the app know it needs to die.
+   * I could add that functionality into the errorAndResponseNotifier event emitter.
+   * But that is messy.  They have different jobs, they should be different emitters.
+   * The only two listeners for deathMonitor are 'die', which instructs the app to begin prepping for death,
+   * or 'undie', which instructs the app to resume business as usual.  I can't see any reason why
+   * we'd ever want to 'undie' the app, rather than just letting it die and rebooting it.  But you never know.
+   */
+  public static readonly deathMonitor: EventEmitter = new EventEmitter()
+
+  /**
+   * @inheritDoc
+   */
+  public static readonly jobStatusNotifier: JobStatusNotifier = new EventEmitter()
+  /**
+   * When this value is true, the app will stop accepting new jobs.
+   */
+  private readonly clusterAsCluster: cluster.Cluster = (cluster as unknown) as cluster.Cluster
+  private static _appIsAwaitingDeath = false
+  private clusterForker: ForkTasker = new ForkTasker(this.clusterAsCluster)
+  private clusterMaster: ClusterMaster = new ClusterMaster(
+    this.clusterAsCluster,
+    this.clusterForker
+  )
+  /**
+   * When this value is true, the app will stop accepting new jobs.
+   * This value should not be changed directly.  Actually, I'm gonna make it a
+   * getter so that it specifically can't be changed directly.  Instead, it should be changed
+   * by emitting a 'die' event from the 'deathMonitor' event emitter
+   */
+  public static get appIsAwaitingDeath() {
+    return this._appIsAwaitingDeath
+  }
+  public initiateJobRequest(identifier: IChannelIdentifier, task: string) {
+    this.clusterForker.initiateJobRequest(identifier, task)
+  }
 }

@@ -1,4 +1,7 @@
 const config = {
+  // total number of forks to break out to
+  // If set to a value <= 0, it will default to the number of cpus
+  totalForks: -1,
   // The port on which everything should connect
   port: 4212,
   // Jobs to accept until a fork should be scheduled for death

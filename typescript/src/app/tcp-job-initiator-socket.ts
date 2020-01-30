@@ -1,8 +1,10 @@
-import { Socket } from 'net'
+import { Socket, createConnection } from 'net'
 import { ChildProcess } from 'child_process'
 import { ITaskedChannelIdentifier } from './models/channel-identifier.interface'
-import { IDataResponse } from './models/data-response.interface'
-import childCommunications from '../config/child-communications.json'
+import { ITCPDataResponse } from './models/tcp-data-response.interface'
+import childCommunications from '../config/child-communications.js'
+import config from '../config/config'
+import { ITaskData } from './models/task-data.interface'
 
 const incrementRequests: string = childCommunications.incrementRequests
 const decrementRequests: string = childCommunications.decrementRequests
@@ -13,13 +15,29 @@ export class TCPJobInitiatorSocket {
    * @param socket The socket
    * @param process The child process
    */
-  constructor(private socket: Socket, private process: ChildProcess) {}
+  constructor(private taskedIdentifier: ITaskedChannelIdentifier, private process: ChildProcess) {
+    const host: string = taskedIdentifier.targetIp
+    const port: number = config.port
+    this.socket = createConnection({host, port})
+  }
   private fullData: string = ''
+  private socket: Socket
+
+  public addSocketListeners() {
+    // Get the callback functions for the socket from the TCPJobInitiatorSocket class
+    this.socket.on('connect', () => {
+      this.connect(this.taskedIdentifier)
+    })
+    this.socket.on('data', this.data)
+    this.socket.on('end', this.end)
+  }
+
+
   /**
    * The callback for the connect event
    * @param taskedIdentifier The identifier for the job to be run
    */
-  public connect(taskedIdentifier: ITaskedChannelIdentifier) {
+  private connect(taskedIdentifier: ITaskedChannelIdentifier) {
     // As the master to increment the number of requests ongoing and total
     this.process.send(incrementRequests)
     // Send the task information across the socket to the destination
@@ -30,12 +48,12 @@ export class TCPJobInitiatorSocket {
    * The data callback.  Data will be saved to this.fullData until the 'END' string is sent
    * @param data
    */
-  public data(data: Buffer) {
+  private data(data: Buffer) {
     this.fullData += data
     if (this.fullData.endsWith('END')) {
       // Should be a JSON...
-      const dataAsJSON = JSON.parse(this.fullData.slice(0, -3)) as IDataResponse
-      this.process.send(dataAsJSON)
+      const dataAsJSON = JSON.parse(this.fullData.slice(0, -3)) as ITCPDataResponse
+      this.process.send({ data: dataAsJSON, task: this.taskedIdentifier } as ITaskData)
       this.fullData = ''
     }
   }
@@ -45,7 +63,7 @@ export class TCPJobInitiatorSocket {
    * Also notifies the parent to decrement the number of concurrent jobs
    * @param hadError
    */
-  public end(hadError: boolean) {
+  private end(hadError: boolean) {
     if (hadError) {
       this.process.send('ERROR')
     }
