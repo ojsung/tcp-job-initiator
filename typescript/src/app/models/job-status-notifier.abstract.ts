@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events'
-import { ITaskExit } from './task-exit'
+import { ITaskExit } from './task-exit.interface'
 import { ITaskedChannelIdentifier } from './channel-identifier.interface'
 import { ITaskError } from './task-error.interface'
 import { ITaskData } from './task-data.interface'

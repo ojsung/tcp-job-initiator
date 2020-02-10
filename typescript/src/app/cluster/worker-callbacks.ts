@@ -45,7 +45,6 @@ function checkForUnfinishedJobs(worker: Worker) {
 
 /**
  * Messages callback
- * @todo Make sure that every possible message is accounted for
  * @param worker
  * @param message
  * @param _handle
@@ -57,7 +56,7 @@ function messageCallback(worker: Worker, message: string | ITaskData, _handle: a
   } else if (message === childCommunications.decrementRequests) {
     decrementRequestsCallback(worker)
   } else {
-    console.log(message) // for real replace this
+    console.log(message) // this is where you would add more string callbacks if you need them
     }
   } else {
     return message

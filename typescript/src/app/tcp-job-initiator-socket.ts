@@ -5,6 +5,7 @@ import { ITCPDataResponse } from './models/tcp-data-response.interface'
 import childCommunications from '../config/child-communications.js'
 import config from '../config/config'
 import { ITaskData } from './models/task-data.interface'
+import { EventEmitter } from 'events'
 
 const incrementRequests: string = childCommunications.incrementRequests
 const decrementRequests: string = childCommunications.decrementRequests
@@ -18,8 +19,10 @@ export class TCPJobInitiatorSocket {
   constructor(private taskedIdentifier: ITaskedChannelIdentifier, private process: ChildProcess) {
     const host: string = taskedIdentifier.targetIp
     const port: number = config.port
-    this.socket = createConnection({host, port})
+    this.socket = createConnection({ host, port })
   }
+
+  public tcpDataCompletionEmitter: EventEmitter = new EventEmitter()
   private fullData: string = ''
   private socket: Socket
 
@@ -28,10 +31,9 @@ export class TCPJobInitiatorSocket {
     this.socket.on('connect', () => {
       this.connect(this.taskedIdentifier)
     })
-    this.socket.on('data', this.data)
-    this.socket.on('end', this.end)
+    this.socket.on('data', this.dataCallback)
+    this.socket.on('end', this.endCallback)
   }
-
 
   /**
    * The callback for the connect event
@@ -48,12 +50,12 @@ export class TCPJobInitiatorSocket {
    * The data callback.  Data will be saved to this.fullData until the 'END' string is sent
    * @param data
    */
-  private data(data: Buffer) {
+  private dataCallback(data: Buffer) {
     this.fullData += data
     if (this.fullData.endsWith('END')) {
       // Should be a JSON...
       const dataAsJSON = JSON.parse(this.fullData.slice(0, -3)) as ITCPDataResponse
-      this.process.send({ data: dataAsJSON, task: this.taskedIdentifier } as ITaskData)
+      this.process.send({ data: dataAsJSON, taskedIdentifier: this.taskedIdentifier } as ITaskData)
       this.fullData = ''
     }
   }
@@ -63,10 +65,16 @@ export class TCPJobInitiatorSocket {
    * Also notifies the parent to decrement the number of concurrent jobs
    * @param hadError
    */
-  private end(hadError: boolean) {
+  private endCallback(hadError: boolean) {
     if (hadError) {
       this.process.send('ERROR')
     }
     this.process.send(decrementRequests)
+    try {
+      this.socket.destroy()
+      this.socket.removeAllListeners()
+    } finally {
+      this.tcpDataCompletionEmitter.emit('kill-me')
+    }
   }
 }

@@ -8,7 +8,6 @@ const fork_tracker_1 = require("./fork-tracker");
 const tcp_job_initiator_socket_1 = require("../tcp-job-initiator-socket");
 const worker_callbacks_1 = require("./worker-callbacks");
 /**
- * @todo add an error handler
  * This helper class helps manage the forks and their jobs from the cluster master.
  * This class can't really survive on its own, and really does need to be paired with ClusterMaster.
  * It's a bit unfortunate, but I saw many drawbacks to writing it any other way.
@@ -19,8 +18,14 @@ class ForkTasker {
         this.jobStatusNotifier = __1.default.jobStatusNotifier;
         this.forkTracker = new fork_tracker_1.ForkTracker();
         cluster.on('message', (worker, message, handle) => {
+            // messageCallback (which didn't end up being a call back after all) wil
+            // return void if it was fed a string.  Strings have their own callbacks that are
+            // handled separately
             const data = worker_callbacks_1.messageCallback(worker, message, handle);
             if (data) {
+                // If it wasn't a string, then it was a task completion notification.
+                // In that case, notify anyone listening on jobStatusNotifier that
+                // the task is now complete, and pass them the data
                 this.jobStatusNotifier.emit('task-complete', data);
             }
         });
@@ -54,23 +59,30 @@ class ForkTasker {
         }
     }
     /**
-     * Listens to worker
-     * @todo add a handler for strings
+     * Instructs the worker to begin listening to messages from the master or itself
+     * If it receives a message containing a tcpJobInitiatorSocket, it will initiate the job contained in the message.
      */
-    listenToWorker() {
+    beginListeningInWorker() {
         // Else if this is a child process,
         // Because process and childprocess do not sufficiently overlap, have to first set it to unknown, then to childprocess.
         const childProcess = process;
-        // When the child process uses the process.send method
+        // When the child process receives a message (either from itself or the master)
         childProcess.on('message', (message) => {
-            // If it's a string, do something with the string
+            // I haven't set to pass any strings to a child process yet, but I'm leaving this here in case I do in the future
             if (typeof message === 'string') {
+                console.log(message);
             }
-            else {
+            else if (typeof message === 'object' && message.task) {
+                // At times, the master will send a tasked identifier to the fork to initiate a job
                 const taskedIdentifier = message;
                 // Add the appropriate listeners and create a TCP server
-                const tcpJobInitiatorSocket = new tcp_job_initiator_socket_1.TCPJobInitiatorSocket(taskedIdentifier, childProcess);
+                let tcpJobInitiatorSocket = new tcp_job_initiator_socket_1.TCPJobInitiatorSocket(taskedIdentifier, childProcess);
                 tcpJobInitiatorSocket.addSocketListeners();
+                tcpJobInitiatorSocket.tcpDataCompletionEmitter.on('kill-me', () => {
+                    var _a;
+                    (_a = tcpJobInitiatorSocket) === null || _a === void 0 ? void 0 : _a.tcpDataCompletionEmitter.removeAllListeners();
+                    tcpJobInitiatorSocket = null;
+                });
             }
         });
     }

@@ -7,10 +7,6 @@ import TCPJobInitiator from '..'
 import { ForkTracker } from './fork-tracker'
 import { JobStatusNotifier } from '../models/job-status-notifier.abstract'
 
-  /**
-   * @todo Add a handler for when the incoming message from the child process is a string
-   * @todo Return messages through event emitter
-   */
 export class ClusterMaster {
 
   constructor(private readonly cluster: Cluster, private readonly forkTasker: ForkTasker) {
@@ -53,7 +49,7 @@ export class ClusterMaster {
       }
       ClusterMaster.forksCreated = true
     } else {
-      this.forkTasker.listenToWorker()
+      this.forkTasker.beginListeningInWorker()
     }
   }
 
@@ -66,6 +62,7 @@ export class ClusterMaster {
       const newWorker = this.cluster.fork()
       ForkTracker.beginTrackingWorker(newWorker)
     } else {
+      // If the app is awaiting death, check to see if the app has killed all of its workers.  If it has, notify the master that it is ready to die.
       if (Object.keys(this.cluster.workers as {[index: string]: Worker}).length === 0 && TCPJobInitiator.appIsAwaitingDeath) {
         TCPJobInitiator.deathMonitor.emit('ready-to-die')
       }

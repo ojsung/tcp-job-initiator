@@ -1,17 +1,19 @@
 import { Cluster, Worker } from 'cluster'
 import { IForkTracker } from '../models/fork.interface'
-import { IChannelIdentifier, ITaskedChannelIdentifier } from '../models/channel-identifier.interface'
+import {
+  IChannelIdentifier,
+  ITaskedChannelIdentifier
+} from '../models/channel-identifier.interface'
 import TCPJobInitiator from '..'
 import { ChildProcess } from 'child_process'
 import { ForkTracker } from './fork-tracker'
 import { TCPJobInitiatorSocket } from '../tcp-job-initiator-socket'
 import { messageCallback, checkForUnfinishedJobs } from './worker-callbacks'
-import { ITaskExit } from '../models/task-exit'
+import { ITaskExit } from '../models/task-exit.interface'
 import { JobStatusNotifier } from '../models/job-status-notifier.abstract'
 import { ITaskData } from '../models/task-data.interface'
 
 /**
- * @todo add an error handler
  * This helper class helps manage the forks and their jobs from the cluster master.
  * This class can't really survive on its own, and really does need to be paired with ClusterMaster.
  * It's a bit unfortunate, but I saw many drawbacks to writing it any other way.
@@ -19,8 +21,14 @@ import { ITaskData } from '../models/task-data.interface'
 export class ForkTasker {
   constructor(private cluster: Cluster) {
     cluster.on('message', (worker: Worker, message: any, handle) => {
+      // messageCallback (which didn't end up being a call back after all) wil
+      // return void if it was fed a string.  Strings have their own callbacks that are
+      // handled separately
       const data: ITaskData | void = messageCallback(worker, message, handle)
       if (data) {
+        // If it wasn't a string, then it was a task completion notification.
+        // In that case, notify anyone listening on jobStatusNotifier that
+        // the task is now complete, and pass them the data
         this.jobStatusNotifier.emit('task-complete', data)
       }
     })
@@ -59,25 +67,31 @@ export class ForkTasker {
   }
 
   /**
-   * Listens to worker
-   * @todo add a handler for strings
+   * Instructs the worker to begin listening to messages from the master or itself
+   * If it receives a message containing a tcpJobInitiatorSocket, it will initiate the job contained in the message.
    */
-  public listenToWorker() {
+  public beginListeningInWorker() {
     // Else if this is a child process,
     // Because process and childprocess do not sufficiently overlap, have to first set it to unknown, then to childprocess.
     const childProcess: ChildProcess = (process as unknown) as ChildProcess
-    // When the child process uses the process.send method
+    // When the child process receives a message (either from itself or the master)
     childProcess.on('message', (message: any) => {
-      // If it's a string, do something with the string
+      // I haven't set to pass any strings to a child process yet, but I'm leaving this here in case I do in the future
       if (typeof message === 'string') {
-      } else {
+        console.log(message)
+      } else if (typeof message === 'object' && message.task) {
+        // At times, the master will send a tasked identifier to the fork to initiate a job
         const taskedIdentifier: ITaskedChannelIdentifier = message as ITaskedChannelIdentifier
         // Add the appropriate listeners and create a TCP server
-        const tcpJobInitiatorSocket: TCPJobInitiatorSocket = new TCPJobInitiatorSocket(
+        let tcpJobInitiatorSocket: TCPJobInitiatorSocket | null = new TCPJobInitiatorSocket(
           taskedIdentifier,
           childProcess
         )
         tcpJobInitiatorSocket.addSocketListeners()
+        tcpJobInitiatorSocket.tcpDataCompletionEmitter.on('kill-me', () => {
+          tcpJobInitiatorSocket?.tcpDataCompletionEmitter.removeAllListeners()
+          tcpJobInitiatorSocket = null
+        })
       }
     })
   }

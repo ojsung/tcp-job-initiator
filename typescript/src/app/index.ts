@@ -7,11 +7,6 @@ import { JobStatusNotifier } from './models/job-status-notifier.abstract'
 
 /**
  * Tcpjob initiator
- * @todo Have the application remove all listeners on a child process on finishing a job, and
- * re-add them when the child process is triggered again.  Make sure that it checks to see if the
- * listeners already exist, in case the child process is running multiple jobs so that it doesn't add
- * duplicate listeners
- * @todo Actually add some proper documentation to this code
  */
 export default class TCPJobInitiator {
   constructor() {

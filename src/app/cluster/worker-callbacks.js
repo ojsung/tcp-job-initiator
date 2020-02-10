@@ -46,7 +46,6 @@ function checkForUnfinishedJobs(worker) {
 exports.checkForUnfinishedJobs = checkForUnfinishedJobs;
 /**
  * Messages callback
- * @todo Make sure that every possible message is accounted for
  * @param worker
  * @param message
  * @param _handle
@@ -60,7 +59,7 @@ function messageCallback(worker, message, _handle) {
             decrementRequestsCallback(worker);
         }
         else {
-            console.log(message); // for real replace this
+            console.log(message); // this is where you would add more string callbacks if you need them
         }
     }
     else {

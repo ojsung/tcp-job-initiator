@@ -8,10 +8,6 @@ const config_1 = __importDefault(require("../../config/config"));
 const os_1 = require("os");
 const __1 = __importDefault(require(".."));
 const fork_tracker_1 = require("./fork-tracker");
-/**
- * @todo Add a handler for when the incoming message from the child process is a string
- * @todo Return messages through event emitter
- */
 class ClusterMaster {
     constructor(cluster, forkTasker) {
         this.cluster = cluster;
@@ -45,7 +41,7 @@ class ClusterMaster {
             ClusterMaster.forksCreated = true;
         }
         else {
-            this.forkTasker.listenToWorker();
+            this.forkTasker.beginListeningInWorker();
         }
     }
     /**
@@ -58,6 +54,7 @@ class ClusterMaster {
             fork_tracker_1.ForkTracker.beginTrackingWorker(newWorker);
         }
         else {
+            // If the app is awaiting death, check to see if the app has killed all of its workers.  If it has, notify the master that it is ready to die.
             if (Object.keys(this.cluster.workers).length === 0 && __1.default.appIsAwaitingDeath) {
                 __1.default.deathMonitor.emit('ready-to-die');
             }
