@@ -1,6 +1,6 @@
 import { Worker } from 'cluster'
 import { IForkTracker, IForkContainer } from '../models/fork.interface'
-import { findMinIndex } from '../tools/find-min-index'
+import { findMinIndex } from 'find-min-index'
 
 export class ForkTracker {
   public static readonly forkedCPUContainer: IForkContainer = {}

@@ -79,5 +79,8 @@
   "bugs": {
     "url": "https://github.com/ojsung/tcp-job-initiator/issues"
   },
-  "homepage": "https://github.com/ojsung/tcp-job-initiator#readme"
+  "homepage": "https://github.com/ojsung/tcp-job-initiator#readme",
+  "dependencies": {
+    "find-min-index": "git+https://github.com/ojsung/find-min-index.git"
+  }
 }
